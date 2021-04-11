@@ -8,7 +8,7 @@
 ## Specifications
 Language: c11
 
-## Exectuion
+## Execution
 - make
 - ./wordcount          (Counts and prints occurence of word in text given on stdin)
 - ./tail \<file\> [-n number_of_lines_to_print] (Implicit lines are 10 and implicit stream is stdin)
