@@ -8,5 +8,7 @@ Shell (POSIXLY_CORRECT)
 
 ## Execution
 ./dirgraph \[-i regex\] \[-n\] <directory>
+  
 -i (ignore) ignores all files and folders, which matches specified regex
+
 -n (normalize) normalization of histogram to fit given output
