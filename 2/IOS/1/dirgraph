@@ -1,0 +1,247 @@
+#!/bin/sh
+export POSIXLY_CORRECT=yes
+
+#Author: Roman Popelka (xpopel24)
+#Date: 30.3.2020
+#IOS - project 1
+
+DIR=$PWD #ANALYZED DIRECTORY PATH
+ND=0     #NUMBER OF DIRECTORIES
+NF=0     #NUMBER OF FILES
+
+##### FILE SIZE CATEGORIES #####
+UNDER100B=0 
+UNDER1KiB=0
+UNDER10KiB=0
+UNDER100KiB=0
+UNDER1MiB=0
+UNDER10MiB=0
+UNDER100MiB=0
+UNDER1GiB=0
+OVEROREQ1GiB=0
+
+NORMALIZATION=0  #IS HISTOGRAM NORMALIZED? 0-NO 1-YES
+ROW_SIZE=0       #WIDTH OF ROW
+ELEMENT_SIZE=1   #SIZE OF 1 ELEMENT (#) if not NORMALIZED SIZE=1
+REGEX=""         #REGULAR EXPRESSION
+IGNOR_REGEX=0    #IS ANY REGEX IGNORED 0-NO 1-YES
+
+
+
+#####  EVALUATION OF FILE SIZE #####
+
+eval_size()
+{
+  if [ $# -gt 0 ];then
+	  if [ $1 -lt 100 ];then
+		  UNDER100B="$(($UNDER100B+1))"
+	  elif [ $1 -lt 1024 ];then
+		  UNDER1KiB=$(($UNDER1KiB+1))
+	  elif [ $1 -lt 10240 ];then
+		  UNDER10KiB=$(($UNDER10KiB+1))
+	  elif [ $1 -lt 102400 ];then
+		  UNDER100KiB=$(($UNDER100KiB+1))
+	  elif [ $1 -lt 1048676 ];then
+		  UNDER1MiB=$(($UNDER1MiB+1))
+	  elif [ $1 -lt 10485760 ];then
+		  UNDER10MiB=$(($UNDER10MiB+1))
+	  elif [ $1 -lt 104857600 ];then
+		  UNDER100MiB=$(($UNDER100MiB+1))
+	  elif [ $1 -lt 1073741824 ];then
+		  UNDER1GiB=$(($UNDER1GiB+1))
+	  elif [ $1 -ge 1073741824 ];then
+		  OVEROREQ1GiB=$(($OVEROREQ1GiB+1))
+	  fi
+  fi
+} 
+
+
+##### DIRECTORY LISTING #####
+# Recursive function which shifts through arguments, if directory is found ND increments by one
+# access directory with cd and call search_dirs() with arguments equal to "ls"(command)
+# If file is found, variable NF increments by one, size of file is evaluated by command 
+# "wc -c  file_name" and assigned to relevant FILE SIZE CATEGORY by function eval_size()
+# If IGNOR_REGEX == 1 function ignors all file and directory names equal to regular expression
+# stored in REGEX
+# When exit code of used commands isn't zero, program exits with exit code 2
+# parameters -> files and directories
+search_dirs()
+{
+ 	 while [ "$#" -gt "0" ];do       #while number of parameters left > 0
+		  if [ -d "$1" ];then     # is dir?
+			  cd "$1" 2> /dev/null    #entering directory
+			  test_exit_code "Can't acces file while analyzing\n" 2
+
+			  ND=$(($ND+1))  #increment ND by one
+
+			  if [ $IGNOR_REGEX -eq 0 ];then         
+				  search_dirs $(ls 2> /dev/null)
+				  test_exit_code "Can't acces file while analyzing\n" 2 
+			  elif [ $IGNOR_REGEX -eq 1 ];then 
+				  search_dirs $(ls | grep -v $REGEX 2> /dev/null)
+				  test_exit_code "Can't acces file while analyzing\n" 2
+			  fi
+		 
+		   elif [ -f "$1" ];then   # is file?
+			  NF=$(($NF+1))    # increment NF by one
+			  eval_size $(wc -c "$1" 2> /dev/null) #eval size
+			  test_exit_code "Can't acces file while analyzing\n" 2
+		  fi
+	
+		  shift
+  	done
+  	cd .. 2> /dev/null   #returns to previous directory
+	test_exit_code "Can't acces file while analyzing\n" 2
+}
+
+##### Checks if exit code of last command  != 0 if condition is true, prints error msg and exit with error code #####
+# 1st parameter -> error message
+# 2nd parameter -> exit code number
+test_exit_code()
+{
+	if [ $? -ne 0 ];then
+		print_error_msg "$1"
+		exit $2
+	fi
+}
+
+##### Prints error msg #####
+# 1st parameter -> error message
+print_error_msg()
+{
+	1>&2 echo "$0: $1"
+}
+
+##### Printing histogram #####
+
+print_histogram()
+{
+	  echo "  <100 B  :  $(print_hashtag $UNDER100B)" 
+	  echo "  <1 KiB  :  $(print_hashtag $UNDER1KiB)" 
+	  echo "  <10 KiB :  $(print_hashtag $UNDER10KiB)" 
+	  echo "  <100 KiB:  $(print_hashtag $UNDER100KiB)" 
+	  echo "  <1 MiB  :  $(print_hashtag $UNDER1MiB)" 
+	  echo "  <10 MiB :  $(print_hashtag $UNDER10MiB)" 
+	  echo "  <100 MiB:  $(print_hashtag $UNDER100MiB)" 
+	  echo "  <1 GiB  :  $(print_hashtag $UNDER1GiB)" 
+	  echo "  >=1 GiB :  $(print_hashtag $OVEROREQ1GiB)"
+}
+
+##### Prints hashtags ######
+# First we divide number of files in category by ELEMENT_SIZE which is without normalization equal to 1
+# with normalization ELEMENT_SIZE=$MAX_SIZE/$ROW_SIZE
+# then we save this number to COUNT, which represents number of '#' printed in histogram in specified  category
+# if number of files in category is less than element size, but greater than 0, one '#' is printed
+print_hashtag()
+{
+ 	 COUNT=$(echo "scale=0;$1/$ELEMENT_SIZE" | bc) #Number of '#' printed
+ 	 STRING=""                                     #String init
+	  if [ $COUNT -eq 0 ] && [ "$1" -gt 0 ];then     
+		  STRING="${STRING}#"
+ 	  fi
+
+ 	 while [ $COUNT -gt 0 ];do                     #Iteration until COUNT is 0
+	        STRING="${STRING}#"
+		COUNT=$(($COUNT-1))
+ 	 done
+ 	 echo "$STRING"                                #Printing 
+}
+
+#### determines and sets row size ####
+#Tests if output is terminal or file
+#If output is terminal, ROW_SIZE=tput cols-1
+#If ouput is file, ROW_SIZE=79
+get_row_size()
+{
+	test -t 1 && ROW_SIZE=$(($(tput cols)-1)) 
+	test -t 1 || ROW_SIZE=79                   
+	ROW_SIZE=$(($ROW_SIZE-13))    #Substituting 13 because of output formating
+}
+
+#### sets element size if normalization is on ####
+# parameters -> number of files in each category
+# iterates  through categories and saves biggest number of files in one category to MAX_SIZE
+# then calculates ELEMENT_SIZE=$MAX_SIZE/$ROW_SIZE
+# if all categories size is smaller than $ROW_SIZE, histogram isn't normalized
+set_normalization_scale()
+{      
+	MAX_SIZE=0  # size of category with highest number of files
+	while [ $# -gt 0 ]
+	do
+		if [ $1 -gt $ROW_SIZE ] && [ $1 -gt $MAX_SIZE ]   # if category_size > $ROW_SIZE && category_size > MAX_SIZE
+		then
+			MAX_SIZE=$1
+			ELEMENT_SIZE=$(echo "scale=2;$MAX_SIZE/$ROW_SIZE" | bc)
+		fi
+		shift
+	done
+}
+
+##### Prints output #####
+print_output()
+{
+	echo Root directory:  $DIR
+	echo Directories: $ND
+	echo All files: $NF
+	echo File size histogram:
+	print_histogram
+}
+
+##### Parsing arguments with getopts ####
+	while getopts 'i:n' opt 
+	do
+		case $opt in
+			i) REGEX=${OPTARG}
+			   IGNOR_REGEX=1   
+			   ;;
+			n) NORMALIZATION=1 
+	                   ;;
+			*) print_error_msg  "Wrong arguments passed"
+			   exit 1
+			 
+		esac
+		shift "$((OPTIND-1))"   # Shifts OPTINDS, that's because we need to get rid of parsed argument to see if there is other parse argument than -i or -n
+	done
+
+	get_row_size  #Sets row size
+
+##### Arguments tests + path validity tests #####
+
+	if [ $# -gt 1 ]; then #If there are more than 1 argument after parsing switches, it's considered as failure, because we expect max 1 argument, which is analyzed dir path
+		print_error_msg "Too many arguments"
+		exit 2
+	fi
+
+	if [ $# -gt 0 ]; then  #If number of arguments left is > 0 sets DIR of to value of 1st argument
+		DIR=$1
+	fi
+
+	if [ $IGNOR_REGEX -eq 1 ] && [ -z $(echo $(basename $DIR) | grep -v $REGEX 2>/dev/null) ]; then # If switch -i is on && regular expression covers the name of analysed dir, script exits with failure
+		test_exit_code "Regex parsing failure" 2
+		print_error_msg "Regular expression matches analyzed  directory name"
+		exit 2
+	fi
+
+	if [ ! -d $DIR ]; then  # If given path isn't directory, script exits with failure
+		print_error_msg "Invalid path"
+		exit 2
+	fi
+	
+##### Directory analyse + normalization set #####
+
+	search_dirs "$DIR"  #Analyzing directories
+
+	if [ $NORMALIZATION -eq 1 ]  # If switch -n is entered, set_normalization_scale function is called
+	then
+		set_normalization_scale $UNDER100B $UNDER1KiB $UNDER10KiB $UNDER100KiB $UNDER1MiB $UNDER10MiB $UNDER100MiB $UNDER1GiB $OVEROREQ1GiB
+	fi
+
+##### Script output print #####
+	print_output  #Prints output
+
+
+
+
+
+
+
