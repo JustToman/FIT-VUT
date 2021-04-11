@@ -2,6 +2,7 @@
 
 ## Description
 First part: Bitset operations implementation, Sieve of Eratosthenes
+
 Second part: Decoding message from PPM files
 
 ## Specifications
