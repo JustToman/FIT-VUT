@@ -4,7 +4,7 @@
 
 int main(int argc, char *argv[])
 {
-   semaphore_unlink(); // Unlinks semaphores at start of program (if somethink unexpected happened and semaphores remained unlinked )
+   semaphore_unlink(); // Unlinks semaphores at start of program (if something unexpected happened and semaphores remained unlinked )
 
    args_t args;
 
